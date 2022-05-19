@@ -72,33 +72,63 @@ int main(int argc, char **argv) {
 			throw err;
 		}
 
-		//part 4 allocate memory to the histogram
-		typedef unsigned int his_vec;
+		//part 4 allocate memory to the histogram and cummulative Histogram
+		typedef int vec_type;
+		// creates an int type for the vector
+		std::vector<vec_type> H(binSize, 0);
+		// creates a vector of type int that is of the predefined binsize
+		size_t histo_size = H.size() * sizeof(vec_type);
 
-		std::vector<his_vec> H(binSize, 0);
-		size_t num_elements = H.size();
+		std::vector<vec_type> cH(binSize, 0);
+		size_t ch_size = cH.size() * sizeof(vec_type);
+		// creates a vector for the cumulative histogram and gets the size
 
+		//Part 6 
 
-		//device - buffers
-		cl::Buffer dev_image_input(context, CL_MEM_READ_ONLY, image_input.size());
-		cl::Buffer dev_image_output(context, CL_MEM_READ_WRITE, image_input.size()); //should be the same as input image
-
+		//device buffers
+		cl::Buffer buffer_image_input(context, CL_MEM_READ_ONLY, image_input.size());
+		//sets up a buffer for the image
+		cl::Buffer buffer_image_output(context, CL_MEM_READ_WRITE, image_input.size());
+		//sets up the output buffer
+		cl::Buffer buffer_histo_output(context, CL_MEM_READ_WRITE, histo_size);
+		//sets up the buffer for the hisogram calculations
+		cl::Buffer buffer_histoC_output(context, CL_MEM_READ_WRITE, ch_size); 
+		//sets up the buffer for the histogram outputs
+		cl::Buffer buffer_LUT_output(context, CL_MEM_READ_WRITE, ch_size);
 		//4.1 Copy images to device memory
 		queue.enqueueWriteBuffer(dev_image_input, CL_TRUE, 0, image_input.size(), &image_input.data()[0]);
 
+		
 		//4.2 Setup and execute the kernel (i.e. device code)
-		cl::Kernel kernel = cl::Kernel(program, "identity");
-		kernel.setArg(0, dev_image_input);
-		kernel.setArg(1, dev_image_output);
+		//histogram kernel to work out the colour histogram for the image
+		cl::Kernel histoKernel = cl::Kernel(program, "histo");
+		histoKernel.setArg(0, dev_image_input);
+		histoKernel.setArg(1, dev_histo_output);
 
-		queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange);
+		cl::Event hisevent;// creates an event for the histogram to get the execution and processing time
+		queue.enqueueNDRangeKernel(histoKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &hisevent);
+		queue.enqueueReadBuffer(dev_histo_output, CL_TRUE, 0, histo_size, &H[0]);
+
+		cl::Kernel histoCKernel = cl::Kernel(program, "histoC");
+		histoCKernel.setArg(0, dev_histo_output);
+		histoCKernel.setArg(1, dev_histoC_output);
+
+		cl::Event histoCevent;
+		queue.enqueueNDRangeKernel(histoCKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &hisevent);
+		queue.enqueueReadBuffer(dev_histo_output, CL_TRUE, 0, ch_size, &cH[0]);
+
 
 		vector<unsigned char> output_buffer(image_input.size());
+
+
+
 		//4.3 Copy the result from device to host
 		queue.enqueueReadBuffer(dev_image_output, CL_TRUE, 0, output_buffer.size(), &output_buffer.data()[0]);
 
 		CImg<unsigned char> output_image(output_buffer.data(), image_input.width(), image_input.height(), image_input.depth(), image_input.spectrum());
+
 		CImgDisplay disp_output(output_image,"output");
+
 
  		while (!disp_input.is_closed() && !disp_output.is_closed()
 			&& !disp_input.is_keyESC() && !disp_output.is_keyESC()) {
