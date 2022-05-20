@@ -132,30 +132,38 @@ int main(int argc, char **argv) {
 		queue.enqueueNDRangeKernel(histoCKernel, cl::NullRange, cl::NDRange(ch_size), cl::NullRange, NULL, &histoCevent);
 		queue.enqueueReadBuffer(buffer_histoC_output, CL_TRUE, 0, ch_size, &cH[0]);
 
+		queue.enqueueFillBuffer(buffer_LUT_output, 0, 0, lut_size);
 
 		cl::Kernel lutKernel = cl::Kernel(program, "LUT");
 		//sets up the normalised histogram via a look up table 
 		lutKernel.setArg(0, buffer_histoC_output);
-		lutKernel.setArg(1, buffer_image_output);
+		lutKernel.setArg(1, buffer_LUT_output);
 
 
 		cl::Event lutEvent;
 
 		queue.enqueueNDRangeKernel(lutKernel, cl::NullRange, cl::NDRange(lut_size), cl::NullRange, NULL, &lutEvent);
-		queue.enqueueReadBuffer(buffer_image_output, CL_TRUE, 0, lut_size, &lut[0]);
+		queue.enqueueReadBuffer(buffer_LUT_output, CL_TRUE, 0, lut_size, &lut[0]);
+
+		cl::Kernel imgKernel = cl::Kernel(program, "adjustImg");
+		//sets up the normalised histogram via a look up table 
+		imgKernel.setArg(0, buffer_histoC_output);
+		imgKernel.setArg(1, buffer_LUT_output);
+		imgKernel.setArg(2, buffer_LUT_output);
 
 
+		cl::Event lutEvent;
 
+		queue.enqueueNDRangeKernel(imgKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &lutEvent);
 		vector<unsigned char> output_buffer(image_input.size());
-
-
-
-		//4.3 Copy the result from device to host
 		queue.enqueueReadBuffer(buffer_image_output, CL_TRUE, 0, output_buffer.size(), &output_buffer.data()[0]);
 
-		CImg<unsigned char> output_image(output_buffer.data(), image_input.width(), image_input.height(), image_input.depth(), image_input.spectrum());
 
+
+
+		CImg<unsigned char> output_image(output_buffer.data(), image_input.width(), image_input.height(), image_input.depth(), image_input.spectrum());
 		CImgDisplay disp_output(output_image,"output");
+		//displays the final normalised image
 
 
  		while (!disp_input.is_closed() && !disp_output.is_closed()
