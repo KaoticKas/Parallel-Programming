@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
 		queue.enqueueNDRangeKernel(histoKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &hisevent);
 		queue.enqueueReadBuffer(buffer_histo_output, CL_TRUE, 0, histo_size, &H[0]);
 		
-		queue.enqueueFillBuffer(buffer_histoC_output, 0, 0, histo_size);
+		queue.enqueueFillBuffer(buffer_histoC_output, 0, 0, ch_size);
 
 		cl::Kernel histoCKernel = cl::Kernel(program, "histoC");
 		//sets up the cummulative 
@@ -118,8 +118,17 @@ int main(int argc, char **argv) {
 		histoCKernel.setArg(1, buffer_histoC_output);
 
 		cl::Event histoCevent;
-		queue.enqueueNDRangeKernel(histoCKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &histoCevent);
-		queue.enqueueReadBuffer(buffer_histo_output, CL_TRUE, 0, ch_size, &cH[0]);
+		queue.enqueueNDRangeKernel(histoCKernel, cl::NullRange, cl::NDRange(ch_size), cl::NullRange, NULL, &histoCevent);
+		queue.enqueueReadBuffer(buffer_histoC_output, CL_TRUE, 0, ch_size, &cH[0]);
+
+		queue.enqueueFillBuffer(buffer_histoC_output, 0, 0, ch_size);
+
+
+
+
+
+
+
 
 
 		vector<unsigned char> output_buffer(image_input.size());
