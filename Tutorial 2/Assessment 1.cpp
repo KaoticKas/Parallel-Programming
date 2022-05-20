@@ -1,12 +1,10 @@
-
-
-
-
-
-
-
-
-
+/*
+CMP3752M - Parallel Programming
+Kacper Hajda - HAJ17694295
+This program uses code adapted from https ://github.com/wing8/OpenCL-Tutorials provided by UOL and the base template was tutorial 2.cpp
+The program uses kernels that use atomic operations that were used from tutorial 3 to execute on the input image which can be changed with the -f flag
+to firstly transform image into a histogram and then that is transformed into a cumulative histogram using atomic functions as well. This then gets put into a lookup table where it gets normalised and then uses the final kernel to transform the input image into a normalsed image that will be outputted by the end. The execution times and memory transfers are recorded as well as total execution time.
+*/
 
 #include <iostream>
 #include <vector>
@@ -121,15 +119,15 @@ int main(int argc, char **argv) {
 		// creates an event for the histogram to get the execution and processing time
 		queue.enqueueNDRangeKernel(histoKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &hisevent);
 		queue.enqueueReadBuffer(buffer_histo_output, CL_TRUE, 0, histo_size, &H[0]);
-		
+		//adds the kernel to the queue to be executed and reads the result into the histo output buffer into the vector H
 		queue.enqueueFillBuffer(buffer_histoC_output, 0, 0, ch_size);
-
+		
 		cl::Kernel histoCKernel = cl::Kernel(program, "histoC");
 		//sets up the cummulative 
 		histoCKernel.setArg(0, buffer_histo_output);
 		histoCKernel.setArg(1, buffer_histoC_output);
 		histoCKernel.setArg(2, binSize);
-
+		//sets the kernel up with the required variables to work out the cummulative buffer
 		cl::Event histoCevent;
 		queue.enqueueNDRangeKernel(histoCKernel, cl::NullRange, cl::NDRange(ch_size), cl::NullRange, NULL, &histoCevent);
 		queue.enqueueReadBuffer(buffer_histoC_output, CL_TRUE, 0, ch_size, &cH[0]);
@@ -159,7 +157,7 @@ int main(int argc, char **argv) {
 		queue.enqueueNDRangeKernel(imgKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &imgAdjustEvent);
 		vector<unsigned char> output_buffer(image_input.size());
 		queue.enqueueReadBuffer(buffer_image_output, CL_TRUE, 0, output_buffer.size(), &output_buffer.data()[0]);
-
+		//sets up the image output after adjusting it by the normalised histogram
 
 
 
@@ -167,12 +165,31 @@ int main(int argc, char **argv) {
 		CImgDisplay disp_output(output_image,"output");
 		//displays the final normalised image
 
+		std::cout << "Histogram execution time [ns]: " << hisevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - hisevent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Histogram memory transfer:" << GetFullProfilingInfo(hisevent, ProfilingResolution::PROF_US) << std::endl;
+
+		std::cout << "Cumulative Histogram execution time [ns]: " << histoCevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histoCevent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Cumulative Histogram memory transfer" << GetFullProfilingInfo(histoCevent, ProfilingResolution::PROF_US) << std::endl;
+
+		std::cout << "Lookup table execution time [ns]: " << lutEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lutEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Lookup table memory transfer:" << GetFullProfilingInfo(histoCevent, ProfilingResolution::PROF_US) << std::endl;
+
+		std::cout << "Image adjust execution time [ns]: " << imgAdjustEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - imgAdjustEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Image adjust memory transfer:" << GetFullProfilingInfo(imgAdjustEvent, ProfilingResolution::PROF_US) << std::endl;
+
+		double totalExecutionTime = (hisevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - hisevent.getProfilingInfo<CL_PROFILING_COMMAND_START>()) + histoCevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histoCevent.getProfilingInfo<CL_PROFILING_COMMAND_START>() + lutEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lutEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() + imgAdjustEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - imgAdjustEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+
+		std::cout << "total execution time[ns]:" << totalExecutionTime<< std::endl;
+
+		//gets the execution times of kernels
+
 
  		while (!disp_input.is_closed() && !disp_output.is_closed()
 			&& !disp_input.is_keyESC() && !disp_output.is_keyESC()) {
 		    disp_input.wait(1);
 		    disp_output.wait(1);
-	    }		
+	    }
+		//exit program
 
 	}
 	catch (const cl::Error& err) {
