@@ -1,3 +1,13 @@
+
+
+
+
+
+
+
+
+
+
 #include <iostream>
 #include <vector>
 
@@ -78,9 +88,9 @@ int main(int argc, char **argv) {
 		std::vector<vec_type> cH(binSize, 0);
 		size_t ch_size = cH.size() * sizeof(vec_type);
 		// creates a vector for the cumulative histogram and gets the size
-		std::vector<vec_type> LUT(binSize, 0); // vector for the look up table to be used for the cummulative Histogram
+		std::vector<vec_type> lut(binSize, 0); // vector for the look up table to be used for the cummulative Histogram
 
-		size_t LUT_size = LUT.size() * sizeof(vec_type);
+		size_t lut_size = lut.size() * sizeof(vec_type);
 		//Part 6 
 
 		//device buffers
@@ -90,7 +100,7 @@ int main(int argc, char **argv) {
 		//sets up the buffer for the hisogram calculations
 		cl::Buffer buffer_histoC_output(context, CL_MEM_READ_WRITE, ch_size); 
 		//sets up the buffer for the histogram outputs
-		cl::Buffer buffer_LUT_output(context, CL_MEM_READ_WRITE, LUT_size);
+		cl::Buffer buffer_LUT_output(context, CL_MEM_READ_WRITE, lut_size);
 
 		cl::Buffer buffer_image_output(context, CL_MEM_READ_WRITE, image_input.size());
 		//sets up the output buffer
@@ -116,18 +126,23 @@ int main(int argc, char **argv) {
 		//sets up the cummulative 
 		histoCKernel.setArg(0, buffer_histo_output);
 		histoCKernel.setArg(1, buffer_histoC_output);
+		histoCKernel.setArg(2, binSize);
 
 		cl::Event histoCevent;
 		queue.enqueueNDRangeKernel(histoCKernel, cl::NullRange, cl::NDRange(ch_size), cl::NullRange, NULL, &histoCevent);
 		queue.enqueueReadBuffer(buffer_histoC_output, CL_TRUE, 0, ch_size, &cH[0]);
 
-		queue.enqueueFillBuffer(buffer_histoC_output, 0, 0, ch_size);
+
+		cl::Kernel lutKernel = cl::Kernel(program, "LUT");
+		//sets up the normalised histogram via a look up table 
+		lutKernel.setArg(0, buffer_histoC_output);
+		lutKernel.setArg(1, buffer_image_output);
 
 
+		cl::Event lutEvent;
 
-
-
-
+		queue.enqueueNDRangeKernel(lutKernel, cl::NullRange, cl::NDRange(lut_size), cl::NullRange, NULL, &lutEvent);
+		queue.enqueueReadBuffer(buffer_image_output, CL_TRUE, 0, lut_size, &lut[0]);
 
 
 

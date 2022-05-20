@@ -17,5 +17,11 @@ kernel void histoC(global const int* A, global int* cH, const int binSize)
 		for (int i = id + 1; i < binSize && id < binSize; i++) {
 			atomic_add(&cH[i], A[id]/3);
 		}
+}
 
+kernel void LUT(global const int* A, global int* B)
+{
+	int id = get_global_id(0);
+
+	B[id] = A[id] * (double)255 / A[255];
 }
