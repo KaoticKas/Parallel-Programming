@@ -35,7 +35,9 @@ kernel void adjustImg(global uchar* A, global int* lut, global uchar* nImg) {
 //this kernel adjusts the input image with the normalised histogram values from the look up table and
 //casts them onto the image to produce the output image
 	int id = get_global_id(0);
+
 	nImg[id] = lut[A[id]];
+	//changes the value of the pixel based on the look up table
 
 	
 }

@@ -13,7 +13,7 @@
 
 #include "Utils.h"
 #include "CImg.h"
-
+//importing the required libraries and support files to read the image and import openCL functions
 using namespace cimg_library;
 
 void print_help() {
@@ -22,7 +22,7 @@ void print_help() {
 	std::cerr << "  -p : select platform " << std::endl;
 	std::cerr << "  -d : select device" << std::endl;
 	std::cerr << "  -l : list all platforms and devices" << std::endl;
-	std::cerr << "  -f : input image file (default: test.ppm)" << std::endl;
+	std::cerr << "  -f : input image file (default: test.pgm)" << std::endl;
 	std::cerr << "  -h : print this message" << std::endl;
 }
 
@@ -48,26 +48,24 @@ int main(int argc, char **argv) {
 		CImg<unsigned char> input_image_8;
 		CImgDisplay disp_input(image_input,"input");
 		int binSize = 256;
+		//initalising the binsize to 256 which is an 8 bit image
 
-
-		//Part 3 - host operations
-		//3.1 Select computing devices
+		//host operations 
 		cl::Context context = GetContext(platform_id, device_id);
-
-		//display the selected device
+		//selects the device
 		std::cout << "Runing on " << GetPlatformName(platform_id) << ", " << GetDeviceName(platform_id, device_id) << std::endl;
 
 		//create a queue to which we will push commands for the device
 		cl::CommandQueue queue(context, CL_QUEUE_PROFILING_ENABLE);
 
-		//3.2 Load & build the device code
+		//Load & build the device code
 		cl::Program::Sources sources;
 
-		AddSources(sources, "kernels/my_kernels.cl");
-
+		AddSources(sources, "kernels/assessment_kernels.cl");
+		//adds the kernels that are device code
 		cl::Program program(context, sources);
 
-		//build and debug the kernel code
+		//build and debug the kernel code, if there is an error throw an error
 		try { 
 			program.build();
 		}
@@ -80,18 +78,20 @@ int main(int argc, char **argv) {
 
 		//part 4 allocate memory to the histogram and cummulative Histogram
 		typedef int vec_type;
-		// creates an int type for the vector
+		// creates an int type for the vector to define other vectors
 		std::vector<vec_type> H(binSize, 0);
 		// creates a vector of type int that is of the predefined binsize
 		size_t histo_size = H.size() * sizeof(vec_type);
-
+		//gets the size of the histogram
 		std::vector<vec_type> cH(binSize, 0);
 		size_t ch_size = cH.size() * sizeof(vec_type);
 		// creates a vector for the cumulative histogram and gets the size
 		std::vector<vec_type> lut(binSize, 0); // vector for the look up table to be used for the cummulative Histogram
 
 		size_t lut_size = lut.size() * sizeof(vec_type);
-		//Part 6 
+		
+		
+		//sets up buffers
 
 		//device buffers
 		cl::Buffer buffer_image_input(context, CL_MEM_READ_ONLY, image_input.size());
@@ -115,8 +115,10 @@ int main(int argc, char **argv) {
 		cl::Kernel histoKernel = cl::Kernel(program, "histo");
 		histoKernel.setArg(0, buffer_image_input);
 		histoKernel.setArg(1, buffer_histo_output);
+		//sets arguments to take in the image and output the vector for the histogram
 
-		cl::Event hisevent;// creates an event for the histogram to get the execution and processing time
+		cl::Event hisevent;
+		// creates an event for the histogram to get the execution and processing time
 		queue.enqueueNDRangeKernel(histoKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &hisevent);
 		queue.enqueueReadBuffer(buffer_histo_output, CL_TRUE, 0, histo_size, &H[0]);
 		
@@ -147,14 +149,14 @@ int main(int argc, char **argv) {
 
 		cl::Kernel imgKernel = cl::Kernel(program, "adjustImg");
 		//sets up the normalised histogram via a look up table 
-		imgKernel.setArg(0, buffer_histoC_output);
+		imgKernel.setArg(0, buffer_image_input);
 		imgKernel.setArg(1, buffer_LUT_output);
-		imgKernel.setArg(2, buffer_LUT_output);
+		imgKernel.setArg(2, buffer_image_output);
 
 
-		cl::Event lutEvent;
+		cl::Event imgAdjustEvent;
 
-		queue.enqueueNDRangeKernel(imgKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &lutEvent);
+		queue.enqueueNDRangeKernel(imgKernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange, NULL, &imgAdjustEvent);
 		vector<unsigned char> output_buffer(image_input.size());
 		queue.enqueueReadBuffer(buffer_image_output, CL_TRUE, 0, output_buffer.size(), &output_buffer.data()[0]);
 
